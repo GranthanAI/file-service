@@ -1,0 +1,36 @@
+# Not used for local dev — matches auth-service's convention.
+#
+# Shared infrastructure (Postgres, Kafka, and this service's dedicated
+# `file-minio` instance) lives in the ROOT docker-compose.yml and is started
+# via `make infra` from this directory. The app itself runs locally with
+# `uv run uvicorn` (see `make run`), not containerized, for fast reload and
+# to stay consistent with every other GraphGPT service in this repo.
+#
+# The Dockerfile is still built for actual deployment (see docs/IMPLEMENTATION_PLAN.md
+# Phase 13). If a one-off containerized run is ever needed locally, uncomment
+# below and run `docker compose up` from this directory after `make infra`.
+#
+# services:
+#   file-service:
+#     build:
+#       context: .
+#       dockerfile: Dockerfile
+#     container_name: graphgpt-file-service
+#     ports:
+#       - "8006:8000"
+#     env_file:
+#       - .env
+#     environment:
+#       - HOST=0.0.0.0
+#       - PORT=8000
+#       - DATABASE_URL=postgresql+asyncpg://postgres:1234@postgres:5432/file_service_db
+#       - MINIO_ENDPOINT=file-minio:9000
+#       - KAFKA_BROKERS=kafka:9092
+#     restart: unless-stopped
+#     networks:
+#       - graphgpt-net
+#
+# networks:
+#   graphgpt-net:
+#     name: graphgpt-net
+#     external: true
