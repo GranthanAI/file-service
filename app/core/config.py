@@ -57,8 +57,13 @@ class Settings(BaseSettings):
     OUTBOX_POLL_INTERVAL_MS: int = 500
     RECONCILIATION_INTERVAL_SECONDS: int = 300
 
-    # Auth
-    AUTH_JWT_PUBLIC_KEY_URL: str | None = None
+    # Auth — verifies JWTs issued by auth-service locally (no network call,
+    # no DB dependency), matching auth-service's OWN actual implementation
+    # (app/security/jwt_manager.py: HS256 with a shared JWT_SECRET_KEY) —
+    # NOT the RS256/public-key design its docs describe but its code doesn't
+    # implement. Must be the same secret/algorithm auth-service signs with.
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
 
     @property
     def allowed_mime_types(self) -> set[str]:

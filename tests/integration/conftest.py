@@ -1,13 +1,20 @@
 from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+from uuid import UUID, uuid4
 
+import jwt
 import pytest
 import pytest_asyncio
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from testcontainers.community.minio import MinioContainer
 from testcontainers.community.postgres import PostgresContainer
+
+from app.core.config import settings
 
 
 def _project_root() -> str:
@@ -84,3 +91,62 @@ def minio_test_bucket(minio_client: Minio) -> str:
     if not minio_client.bucket_exists(bucket):
         minio_client.make_bucket(bucket)
     return bucket
+
+
+@pytest.fixture
+def current_user_id() -> UUID:
+    return uuid4()
+
+
+@pytest.fixture
+def auth_headers(current_user_id: UUID) -> dict[str, str]:
+    """A real JWT signed with the same JWT_SECRET_KEY/JWT_ALGORITHM the app
+    verifies with (docs/LLD.md's auth pattern, mirroring auth-service's own
+    HS256 implementation) — exercises the real get_current_user_id
+    verification path rather than mocking it out."""
+    token = jwt.encode(
+        {"sub": str(current_user_id), "exp": datetime.now(timezone.utc) + timedelta(minutes=15)},
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def app_client(migrated_database_url: str, minio_client: Minio):
+    """A TestClient wired to the ephemeral Postgres + MinIO from the fixtures
+    above, via FastAPI dependency_overrides — NOT the app's real
+    settings-configured DB/MinIO. bootstrap_buckets is mocked (it's already
+    covered by tests/integration/test_storage.py::test_bucket_bootstrap_is_idempotent)
+    since it isn't reachable via dependency_overrides (lifespan calls it
+    directly, not through Depends()) — the two buckets it would have created
+    are created directly on the test MinIO instead.
+    """
+    from app.api.deps import get_db
+    from app.main import app
+    from app.storage.minio_client import get_minio_client
+
+    for bucket in (settings.BUCKET_FILES, settings.BUCKET_QUARANTINE):
+        if not minio_client.bucket_exists(bucket):
+            minio_client.make_bucket(bucket)
+
+    engine = create_async_engine(migrated_database_url)
+    session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+
+    async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        async with session_factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_minio_client] = lambda: minio_client
+
+    with patch("app.lifespan.bootstrap_buckets"):
+        with TestClient(app) as client:
+            yield client
+
+    app.dependency_overrides.clear()

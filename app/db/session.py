@@ -19,6 +19,17 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency yielding a request-scoped AsyncSession."""
+    """FastAPI dependency yielding a request-scoped AsyncSession.
+
+    Commits on success, rolls back on any exception — a route/service that
+    only ever calls repository .flush() (never .commit()) relies entirely on
+    this dependency to actually persist the transaction at the end of the
+    request (matches auth-service's app/api/deps.py::get_db pattern).
+    """
     async with get_session_factory()() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

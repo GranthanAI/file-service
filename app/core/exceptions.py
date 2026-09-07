@@ -1,11 +1,13 @@
+from uuid import UUID
+
 from app.core.enums import FileStatus
 
 
 class FileServiceError(Exception):
-    """Base class for domain exceptions. Phase 3 adds the remaining set from
-    docs/LLD.md §8 (PermissionDeniedError, AlreadyCompletedError,
-    PresignExpiredError, UploadRateLimitExceededError, MinioUnavailableError)
-    plus the central FastAPI exception handler registration in app/main.py."""
+    """Base class for domain exceptions. Later phases add the remaining set
+    from docs/LLD.md §8 (RetentionLockedError — Phase 8 delete;
+    UploadRateLimitExceededError, MinioUnavailableError — not yet needed by
+    any implemented code path)."""
 
 
 class InvalidStateTransitionError(FileServiceError):
@@ -73,3 +75,83 @@ class ContentTypeMismatchError(FileServiceError):
         super().__init__(
             f"Expected content type '{expected_content_type}' but object has '{actual_content_type}'"
         )
+
+
+# --- Phase 3 additions (docs/LLD.md §8) ---
+
+
+class PermissionDeniedError(FileServiceError):
+    """Raised when the requester is not the file's owner (docs/LLD.md §4.1
+    step 2, §9). Maps to HTTP 403."""
+
+    def __init__(self, document_id: UUID, requester_id: UUID) -> None:
+        self.document_id = document_id
+        self.requester_id = requester_id
+        super().__init__(f"User {requester_id} is not permitted to access document {document_id}")
+
+
+class FileRecordNotFoundError(FileServiceError):
+    """Raised when `document_id` has no corresponding `files` row
+    (docs/LLD.md §5.2). Named to avoid shadowing Python's builtin
+    `FileNotFoundError` (an OS-level exception) — this is a DB-record lookup
+    failure, a different thing entirely. Maps to HTTP 404."""
+
+    def __init__(self, document_id: UUID) -> None:
+        self.document_id = document_id
+        super().__init__(f"No file found with document_id {document_id}")
+
+
+class AlreadyCompletedError(FileServiceError):
+    """Raised when `/complete` is called again for an already-completed
+    upload but with different terms than what was actually completed (e.g. a
+    mismatched client_checksum) — docs/LLD.md §5.2. A repeat call with
+    matching/no terms is idempotent (200), not this. Maps to HTTP 409."""
+
+    def __init__(self, document_id: UUID) -> None:
+        self.document_id = document_id
+        super().__init__(f"Document {document_id} was already completed with different terms")
+
+
+class PresignExpiredError(FileServiceError):
+    """Raised when `/complete` is called after the upload_jobs presign
+    window has passed (docs/LLD.md §4.1 step 5) — caller must re-initiate.
+    Maps to HTTP 410."""
+
+    def __init__(self, document_id: UUID) -> None:
+        self.document_id = document_id
+        super().__init__(f"Presigned upload for document {document_id} has expired; re-initiate the upload")
+
+
+# --- Exception -> HTTP status mapping (docs/LLD.md §8) and central handler
+# registration, called once from app/main.py. Only exceptions actually
+# raised by implemented code are mapped here; add an entry the same phase
+# the exception is introduced. ---
+
+EXCEPTION_STATUS_MAP: dict[type[FileServiceError], int] = {
+    InvalidContentTypeError: 400,
+    UploadSizeExceededError: 400,
+    PermissionDeniedError: 403,
+    FileRecordNotFoundError: 404,
+    AlreadyCompletedError: 409,
+    InvalidStateTransitionError: 409,
+    PresignExpiredError: 410,
+    ObjectNotFoundError: 422,
+    SizeMismatchError: 422,
+    ContentTypeMismatchError: 422,
+}
+
+
+def register_exception_handlers(app) -> None:  # noqa: ANN001 — FastAPI, avoided as an import-time type here
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    from app.api.schemas.common import ErrorResponse
+
+    async def _handle(request: Request, exc: FileServiceError) -> JSONResponse:
+        status_code = EXCEPTION_STATUS_MAP.get(type(exc), 500)
+        request_id = getattr(request.state, "request_id", None)
+        body = ErrorResponse(error_code=type(exc).__name__, message=str(exc), request_id=request_id)
+        return JSONResponse(status_code=status_code, content=body.model_dump())
+
+    for exc_class in EXCEPTION_STATUS_MAP:
+        app.add_exception_handler(exc_class, _handle)

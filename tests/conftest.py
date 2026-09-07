@@ -8,3 +8,4 @@ os.environ.setdefault(
 os.environ.setdefault("MINIO_ENDPOINT", "localhost:9010")
 os.environ.setdefault("MINIO_ACCESS_KEY", "minioadmin")
 os.environ.setdefault("MINIO_SECRET_KEY", "minioadmin123")
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-unit-tests")

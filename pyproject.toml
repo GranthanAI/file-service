@@ -16,6 +16,7 @@ dependencies = [
     "aiokafka>=0.10.0",
     "filetype>=1.2.0",
     "structlog>=24.1.0",
+    "pyjwt>=2.8.0",
 ]
 
 [dependency-groups]
