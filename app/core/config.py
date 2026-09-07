@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     BUCKET_FILES: str = "graphgpt-files"
     BUCKET_QUARANTINE: str = "graphgpt-files-quarantine"
     MINIO_KAFKA_NOTIFICATION_ARN: str = "arn:minio:sqs::file-events:kafka"
+    # Whether to wire the bucket -> Kafka notification during bootstrap (docs/LLD.md §3.2,
+    # docs/HLD.md §12). Requires the `notify_kafka:file-events` target to already be
+    # registered server-side (`mc admin config set ...`) — separate infra setup this app
+    # cannot perform itself, so this defaults off until that's provisioned.
+    MINIO_NOTIFICATIONS_ENABLED: bool = False
 
     # Kafka
     KAFKA_BROKERS: str = "localhost:9092"

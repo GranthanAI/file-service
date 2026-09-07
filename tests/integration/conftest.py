@@ -4,7 +4,9 @@ import pytest
 import pytest_asyncio
 from alembic import command
 from alembic.config import Config
+from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from testcontainers.community.minio import MinioContainer
 from testcontainers.community.postgres import PostgresContainer
 
 
@@ -50,3 +52,35 @@ async def db_session(migrated_database_url: str) -> AsyncGenerator[AsyncSession,
         yield session
         await session.rollback()
     await engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def minio_container():
+    """Ephemeral MinIO on a random free host port — same rationale as
+    postgres_container: isolated, no conflict with the dedicated `file-minio`
+    dev container, nothing persists after the test session.
+
+    MINIO_KMS_SECRET_KEY enables the built-in single-key KMS so
+    bucket_bootstrap's set_bucket_encryption (SSE-S3) succeeds — modern
+    MinIO rejects SSE-S3 with "KMS is not configured" otherwise. Same
+    dev-only key used in the root docker-compose.yml's file-minio service,
+    not a production secret.
+    """
+    container = MinioContainer().with_env(
+        "MINIO_KMS_SECRET_KEY", "test-key:SEg942nDjeIcAe34dNb+Dl/Y8QOOeUrpdgKRxTAtEDQ="
+    )
+    with container as started:
+        yield started
+
+
+@pytest.fixture
+def minio_client(minio_container: MinioContainer) -> Minio:
+    return minio_container.get_client()
+
+
+@pytest.fixture
+def minio_test_bucket(minio_client: Minio) -> str:
+    bucket = "test-bucket"
+    if not minio_client.bucket_exists(bucket):
+        minio_client.make_bucket(bucket)
+    return bucket

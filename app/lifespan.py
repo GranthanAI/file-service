@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from app.core.logging import get_logger
 from app.db.postgres import dispose_engine, get_engine
+from app.storage.bucket_bootstrap import bootstrap_buckets
 from app.storage.minio_client import get_minio_client
 
 logger = get_logger(__name__)
@@ -14,9 +15,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup/shutdown wiring for the File Service.
 
-    Phase 0 only constructs the DB engine and MinIO client so /health/live
-    can boot cleanly. Later phases add here (in order, per docs/IMPLEMENTATION_PLAN.md):
-      - Phase 2: storage.bucket_bootstrap.bootstrap_buckets()
+    Later phases add here (in order, per docs/IMPLEMENTATION_PLAN.md):
       - Phase 5: Kafka producer start/stop, outbox_worker background task
       - Phase 6: quarantine_service consumer background task
       - Phase 7: processing_status_consumer background task
@@ -29,6 +28,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     minio_client = get_minio_client()
     app.state.minio_client = minio_client
+    bootstrap_buckets(minio_client)
 
     logger.info("file_service.startup.complete")
     try:
