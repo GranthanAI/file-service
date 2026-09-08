@@ -1,12 +1,14 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
+from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id, get_db
-from app.api.schemas.file import FileListItem, FileListResponse, FileResponse
+from app.api.schemas.file import DeleteResponse, FileListItem, FileListResponse, FileResponse
 from app.core.enums import FileStatus
-from app.services import file_service
+from app.services import delete_service, file_service
+from app.storage.minio_client import get_minio_client
 
 router = APIRouter(tags=["files"])
 
@@ -69,3 +71,15 @@ async def list_files(
         items=[FileListItem(document_id=f.document_id, filename=f.filename, status=f.status) for f in files],
         next_cursor=next_cursor,
     )
+
+
+@router.delete("/files/{document_id}", response_model=DeleteResponse, status_code=status.HTTP_202_ACCEPTED)
+async def delete_file(
+    document_id: UUID,
+    requester_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+    minio_client: Minio = Depends(get_minio_client),
+) -> DeleteResponse:
+    """docs/LLD.md §5.8/§6.5 — requires OWNER."""
+    file = await delete_service.delete_file(db, minio_client, document_id, requester_id)
+    return DeleteResponse(document_id=file.document_id, status=file.status)

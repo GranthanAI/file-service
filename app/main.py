@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.routers import files, health, permissions, retry, status, upload
+from app.api.routers import download, files, health, permissions, retry, status, upload
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
@@ -24,10 +24,11 @@ def create_app() -> FastAPI:
     app.include_router(status.router)
     app.include_router(permissions.router)
     app.include_router(retry.router)
+    app.include_router(download.router)
     register_exception_handlers(app)
 
     # Registered in later phases (per docs/IMPLEMENTATION_PLAN.md):
-    #   Phase 8: download, Phase 10: readiness route on health.router
+    #   Phase 10: readiness route on health.router
 
     return app
 

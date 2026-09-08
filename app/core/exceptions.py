@@ -122,6 +122,37 @@ class PresignExpiredError(FileServiceError):
         super().__init__(f"Presigned upload for document {document_id} has expired; re-initiate the upload")
 
 
+# --- Phase 8 additions (docs/HLD.md §15/§16, docs/LLD.md §2.3/§6.5) ---
+
+
+class VersioningNotAllowedError(FileServiceError):
+    """Raised by version_service — a new version can only be initiated/
+    completed while the file is READY (the previous version fully
+    processed). Not a lifecycle_service.transition edge violation itself
+    (no files.status change happens at version-initiate time at all, see
+    file_repository.set_pending_version's docstring) — this is a business
+    precondition specific to versioning, so it gets its own exception,
+    mirroring RetryNotAllowedError's rationale. Maps to HTTP 409."""
+
+    def __init__(self, document_id: UUID, current_status: FileStatus) -> None:
+        self.document_id = document_id
+        self.current_status = current_status
+        super().__init__(
+            f"Cannot start a new version for document {document_id}: current status is {current_status.value}, not READY"
+        )
+
+
+class RetentionLockedError(FileServiceError):
+    """Raised by delete_service.delete_file when MinIO's Object Locking
+    (governance/compliance retention) prevents removing a version's object —
+    surfaced as a 409, not silently no-op'd (docs/HLD.md §15). Maps to
+    HTTP 409."""
+
+    def __init__(self, document_id: UUID) -> None:
+        self.document_id = document_id
+        super().__init__(f"Document {document_id} cannot be deleted: a retention lock is active on one of its versions")
+
+
 # --- Phase 7 addition (docs/LLD.md §4.4, §5.7) ---
 
 
@@ -154,6 +185,8 @@ EXCEPTION_STATUS_MAP: dict[type[FileServiceError], int] = {
     AlreadyCompletedError: 409,
     InvalidStateTransitionError: 409,
     RetryNotAllowedError: 409,
+    RetentionLockedError: 409,
+    VersioningNotAllowedError: 409,
     PresignExpiredError: 410,
     ObjectNotFoundError: 422,
     SizeMismatchError: 422,

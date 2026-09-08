@@ -92,8 +92,15 @@ async def test_worker_publishes_and_marks_processed(
 ) -> None:
     row = await _insert_outbox_row(db_session)
 
+    # >= 1, not == 1: migrated_database_url is session-scoped (docs/LLD.md's
+    # test suite shares one Postgres across every integration test file), so
+    # other tests that go through app_client's real (committed) DB session —
+    # e.g. Phase 8's upload/delete flow tests — can leave their own
+    # unprocessed outbox rows sitting in the same table. This test only
+    # needs to prove ITS row got published and marked processed, not that
+    # it's the only row in the backlog.
     published_count = await publish_batch(db_session, kafka_producer)
-    assert published_count == 1
+    assert published_count >= 1
 
     refreshed = (await db_session.execute(select(OutboxEvent).where(OutboxEvent.id == row.id))).scalar_one()
     assert refreshed.processed is True

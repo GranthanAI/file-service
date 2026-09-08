@@ -45,3 +45,10 @@ class FileStatusResponse(BaseModel):
     document_id: UUID
     status: FileStatus
     retry_count: int
+
+
+class DeleteResponse(BaseModel):
+    """docs/LLD.md §5.8."""
+
+    document_id: UUID
+    status: FileStatus

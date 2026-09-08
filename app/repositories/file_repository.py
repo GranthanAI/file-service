@@ -73,6 +73,27 @@ class FileRepository:
         return file_obj
 
     @staticmethod
+    async def set_pending_version(
+        db: AsyncSession, file_obj: File, *, storage_key: str, storage_bucket: str, current_version: int
+    ) -> File:
+        """docs/HLD.md §16 / docs/LLD.md §2.3 — repoints `files.storage_key`/
+        `storage_bucket`/`current_version` at a prospective new version
+        BEFORE any bytes have been verified, mirroring exactly how `insert`
+        already does this for a brand-new v1 row (its `storage_key` also
+        points at an object that doesn't exist yet, from INSERT until
+        `/complete` verifies it) — the same accepted transient-inconsistency
+        window, just for version N+1 instead of version 1. Deliberately does
+        NOT go through `update_status` — no `files.status` change happens
+        here, only the version-location pointer, so lifecycle_service.transition
+        has nothing to validate."""
+        file_obj.storage_key = storage_key
+        file_obj.storage_bucket = storage_bucket
+        file_obj.current_version = current_version
+        db.add(file_obj)
+        await db.flush()
+        return file_obj
+
+    @staticmethod
     async def increment_retry_count(db: AsyncSession, file_obj: File) -> File:
         file_obj.retry_count += 1
         db.add(file_obj)
