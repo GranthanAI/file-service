@@ -57,8 +57,13 @@ def bootstrap_buckets(client: Minio) -> None:
         client.delete_bucket_policy(bucket)
 
     if settings.MINIO_NOTIFICATIONS_ENABLED:
+        # docs/LLD.md §4.5/§6.6: quarantine_service consumes ObjectCreated
+        # for the QUARANTINE bucket (that's where uploads land when
+        # AV_SCAN_ENABLED=true, not graphgpt-files) — notifications on
+        # BUCKET_FILES would never fire for anything quarantine_service
+        # needs to react to.
         client.set_bucket_notification(
-            settings.BUCKET_FILES,
+            settings.BUCKET_QUARANTINE,
             NotificationConfig(
                 queue_config_list=[
                     QueueConfig(

@@ -48,6 +48,17 @@ class FileRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_bucket_and_key(db: AsyncSession, storage_bucket: str, storage_key: str) -> File | None:
+        """Looks up the `files` row an inbound MinIO ObjectCreated event
+        refers to (docs/LLD.md §4.5/§6.6) — the event carries a bucket/key,
+        not a document_id, and `uq_files_bucket_key` (docs/LLD.md §2.1)
+        guarantees this is unambiguous."""
+        result = await db.execute(
+            select(File).where(File.storage_bucket == storage_bucket, File.storage_key == storage_key)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def update_status(db: AsyncSession, file_obj: File, target: FileStatus, **fields) -> File:
         """Validates the edge via lifecycle_service.transition() before
         writing — this is the ONLY place files.status should be assigned

@@ -122,6 +122,25 @@ class PresignExpiredError(FileServiceError):
         super().__init__(f"Presigned upload for document {document_id} has expired; re-initiate the upload")
 
 
+# --- Phase 7 addition (docs/LLD.md §4.4, §5.7) ---
+
+
+class RetryNotAllowedError(FileServiceError):
+    """Raised by retry_service.retry_upload — retry is only valid from
+    FAILED (docs/LLD.md §4.4/§5.7). The lifecycle_service state machine
+    itself would actually permit some other current states to reach
+    PROCESSING (e.g. READY -> PROCESSING for a legitimate reindex,
+    docs/LLD.md §4.2) — this rule is specific to the /retry endpoint's
+    business precondition, not a state-machine edge violation, so it's
+    enforced here rather than by lifecycle_service.transition. Maps to
+    HTTP 409."""
+
+    def __init__(self, document_id: UUID, current_status: FileStatus) -> None:
+        self.document_id = document_id
+        self.current_status = current_status
+        super().__init__(f"Cannot retry document {document_id}: current status is {current_status.value}, not FAILED")
+
+
 # --- Exception -> HTTP status mapping (docs/LLD.md §8) and central handler
 # registration, called once from app/main.py. Only exceptions actually
 # raised by implemented code are mapped here; add an entry the same phase
@@ -134,6 +153,7 @@ EXCEPTION_STATUS_MAP: dict[type[FileServiceError], int] = {
     FileRecordNotFoundError: 404,
     AlreadyCompletedError: 409,
     InvalidStateTransitionError: 409,
+    RetryNotAllowedError: 409,
     PresignExpiredError: 410,
     ObjectNotFoundError: 422,
     SizeMismatchError: 422,

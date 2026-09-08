@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # registered server-side (`mc admin config set ...`) — separate infra setup this app
     # cannot perform itself, so this defaults off until that's provisioned.
     MINIO_NOTIFICATIONS_ENABLED: bool = False
+    # docs/HLD.md §12 example topic name — must match whatever the MinIO
+    # server-side `notify_kafka:file-events` target was actually provisioned
+    # with (see docker/minio/init-buckets.sh), since that's server-side
+    # config this app doesn't control.
+    MINIO_OBJECT_EVENTS_TOPIC: str = "minio.object.events"
 
     # Kafka
     KAFKA_BROKERS: str = "localhost:9092"
@@ -52,6 +57,14 @@ class Settings(BaseSettings):
 
     # Feature flags
     AV_SCAN_ENABLED: bool = False
+    # docs/LLD.md Phase 6 task 4: a pluggable scanner interface — CLAMAV_ENABLED=false
+    # (the default, for environments without ClamAV) uses av_scanner.NoOpScanner,
+    # which always reports clean; true uses av_scanner.ClamdScanner against a
+    # real clamd daemon at CLAMAV_HOST:CLAMAV_PORT.
+    CLAMAV_ENABLED: bool = False
+    CLAMAV_HOST: str = "localhost"
+    CLAMAV_PORT: int = 3310
+    CLAMAV_TIMEOUT_SECONDS: float = 30.0
 
     # Background workers
     OUTBOX_POLL_INTERVAL_MS: int = 500

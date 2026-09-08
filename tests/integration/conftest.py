@@ -6,11 +6,13 @@ from uuid import UUID, uuid4
 import jwt
 import pytest
 import pytest_asyncio
+from aiokafka import AIOKafkaProducer
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from testcontainers.community.kafka import KafkaContainer
 from testcontainers.community.minio import MinioContainer
 from testcontainers.community.postgres import PostgresContainer
 
@@ -93,6 +95,27 @@ def minio_test_bucket(minio_client: Minio) -> str:
     return bucket
 
 
+@pytest.fixture(scope="session")
+def kafka_container():
+    """Ephemeral Kafka on a random free host port — same rationale as
+    postgres_container/minio_container above: isolated, nothing persists
+    after the test session. Shared (session-scoped) across every test file
+    that needs a real Kafka broker (test_outbox_publishing.py,
+    test_processing_status_flow.py) so its startup cost is paid once."""
+    with KafkaContainer() as container:
+        yield container
+
+
+@pytest_asyncio.fixture
+async def kafka_producer(kafka_container: KafkaContainer) -> AsyncGenerator[AIOKafkaProducer, None]:
+    producer = AIOKafkaProducer(bootstrap_servers=kafka_container.get_bootstrap_server())
+    await producer.start()
+    try:
+        yield producer
+    finally:
+        await producer.stop()
+
+
 @pytest.fixture
 def current_user_id() -> UUID:
     return uuid4()
@@ -128,7 +151,10 @@ def app_client(migrated_database_url: str, minio_client: Minio):
     booting a real producer/worker here would just be an unused dependency
     on a live broker. Real outbox-publishing behavior is covered by
     tests/integration/test_outbox_publishing.py against a real, ephemeral
-    Kafka (testcontainers).
+    Kafka (testcontainers). run_processing_status_consumer (Phase 7) is
+    mocked for the same reason — it isn't gated behind AV_SCAN_ENABLED and
+    would otherwise need a live broker for every HTTP-flow test in this
+    fixture, not just quarantine-specific ones.
     """
     from app.api.deps import get_db
     from app.main import app
@@ -158,6 +184,7 @@ def app_client(migrated_database_url: str, minio_client: Minio):
         patch("app.lifespan.start_producer", AsyncMock(return_value=AsyncMock())),
         patch("app.lifespan.stop_producer", AsyncMock()),
         patch("app.lifespan.run_outbox_worker", AsyncMock()),
+        patch("app.lifespan.run_processing_status_consumer", AsyncMock()),
     ):
         with TestClient(app) as client:
             yield client

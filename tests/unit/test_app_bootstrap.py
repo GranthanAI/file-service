@@ -16,6 +16,10 @@ are mocked out here for the identical reason — this is a bootstrap smoke
 test, not the place to require a live Kafka broker. Real outbox-publishing
 correctness is covered by tests/integration/test_outbox_publishing.py
 against a real, ephemeral Kafka (testcontainers).
+
+Phase 7 wired `run_processing_status_consumer` in unconditionally (it isn't
+gated behind AV_SCAN_ENABLED the way Phase 6's quarantine consumer is), so
+it's mocked out here too for the same reason.
 """
 
 from unittest.mock import AsyncMock, patch
@@ -31,6 +35,7 @@ def test_health_live_returns_200() -> None:
         patch("app.lifespan.start_producer", AsyncMock(return_value=AsyncMock())),
         patch("app.lifespan.stop_producer", AsyncMock()),
         patch("app.lifespan.run_outbox_worker", AsyncMock()),
+        patch("app.lifespan.run_processing_status_consumer", AsyncMock()),
     ):
         with TestClient(app) as client:
             response = client.get("/health/live")

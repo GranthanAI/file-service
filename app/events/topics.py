@@ -23,3 +23,13 @@ PRODUCED_TOPICS: frozenset[str] = frozenset(
 FILE_PROCESSING_STARTED = "file.processing.started"
 FILE_PROCESSING_COMPLETED = "file.processing.completed"
 FILE_PROCESSING_FAILED = "file.processing.failed"
+
+# Consumed by File Service — MinIO's own bucket-notification event stream
+# (docs/HLD.md §12), not File Service's outbox. quarantine_service.py
+# subscribes to this topic to know when a new object has landed in the
+# quarantine bucket. The compiled-in default here must match whatever the
+# MinIO server-side `notify_kafka:file-events` target was actually
+# provisioned with — settings.MINIO_OBJECT_EVENTS_TOPIC is the actual,
+# possibly-overridden value used at runtime; this constant only documents
+# the default.
+MINIO_OBJECT_EVENTS = "minio.object.events"

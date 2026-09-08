@@ -7,10 +7,7 @@ not a mocked producer/consumer.
 import asyncio
 import json
 import uuid
-from collections.abc import AsyncGenerator
 
-import pytest
-import pytest_asyncio
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -20,24 +17,9 @@ from app.events.outbox_publisher import _build_message, publish_batch
 from app.models.outbox import OutboxEvent
 from app.repositories.outbox_repository import OutboxRepository
 
-
-@pytest.fixture(scope="session")
-def kafka_container():
-    """Ephemeral Kafka on a random free host port — same rationale as
-    postgres_container/minio_container in this directory's own conftest.py:
-    isolated, nothing persists after the test session."""
-    with KafkaContainer() as container:
-        yield container
-
-
-@pytest_asyncio.fixture
-async def kafka_producer(kafka_container: KafkaContainer) -> AsyncGenerator[AIOKafkaProducer, None]:
-    producer = AIOKafkaProducer(bootstrap_servers=kafka_container.get_bootstrap_server())
-    await producer.start()
-    try:
-        yield producer
-    finally:
-        await producer.stop()
+# kafka_container / kafka_producer fixtures live in conftest.py (shared with
+# test_processing_status_flow.py) to avoid paying Kafka's container startup
+# cost twice in one test run.
 
 
 async def _insert_outbox_row(db: AsyncSession, *, event_type: str = "file.uploaded") -> OutboxEvent:
