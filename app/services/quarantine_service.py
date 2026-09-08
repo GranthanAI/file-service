@@ -8,7 +8,6 @@ import asyncio
 import hashlib
 import json
 from datetime import datetime, timezone
-from urllib.parse import unquote
 
 from aiokafka import AIOKafkaConsumer
 from minio import Minio
@@ -22,6 +21,7 @@ from app.models.file import File
 from app.repositories.file_repository import FileRepository
 from app.repositories.outbox_repository import OutboxRepository
 from app.services.av_scanner import Scanner
+from app.utils.minio_events import parse_object_created_event
 from app.validation.magic_bytes import sniff_content_type
 
 logger = get_logger(__name__)
@@ -173,21 +173,6 @@ async def _reject_infected_object(
     logger.warning("quarantine.infected", document_id=str(file.document_id), signature=signature)
 
 
-def _parse_object_created_event(message: dict) -> list[tuple[str, str]]:
-    """Extracts (bucket, key) pairs from a MinIO bucket-notification message
-    (docs/HLD.md §12) — MinIO follows the S3 event notification shape
-    (`Records[].s3.bucket.name` / `Records[].s3.object.key`), with the key
-    URL-encoded the same way S3 itself encodes it."""
-    pairs = []
-    for record in message.get("Records", []):
-        s3 = record.get("s3", {})
-        bucket = s3.get("bucket", {}).get("name")
-        key = s3.get("object", {}).get("key")
-        if bucket and key:
-            pairs.append((bucket, unquote(key)))
-    return pairs
-
-
 async def run_quarantine_consumer(
     minio_client: Minio, scanner: Scanner, session_factory: async_sessionmaker[AsyncSession], stop_event: asyncio.Event
 ) -> None:
@@ -222,7 +207,7 @@ async def run_quarantine_consumer(
                         logger.exception("quarantine_consumer.bad_message")
                         continue
 
-                    for bucket, key in _parse_object_created_event(message):
+                    for bucket, key in parse_object_created_event(message):
                         try:
                             async with session_factory() as db:
                                 await process_object_created(db, minio_client, scanner, bucket=bucket, key=key)

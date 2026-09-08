@@ -3,11 +3,14 @@ from datetime import datetime, timedelta, timezone
 from minio import Minio
 from minio.datatypes import PostPolicy
 
+from app.core.metrics import minio_presign_duration_seconds
+
 
 def presign_put(client: Minio, bucket: str, key: str, expiry: timedelta) -> str:
     """See docs/LLD.md §3.4. Bare presigned PUT — used when
     settings.UPLOAD_STRICT_POLICY is False."""
-    return client.presigned_put_object(bucket, key, expires=expiry)
+    with minio_presign_duration_seconds.time():
+        return client.presigned_put_object(bucket, key, expires=expiry)
 
 
 def presign_post_policy(
@@ -43,7 +46,8 @@ def presign_post_policy(
     policy.add_equals_condition("Content-Type", content_type)
     policy.add_content_length_range_condition(1, max_size)
 
-    form_data = client.presigned_post_policy(policy)
+    with minio_presign_duration_seconds.time():
+        form_data = client.presigned_post_policy(policy)
     form_data["key"] = key
     form_data["Content-Type"] = content_type
 
@@ -65,4 +69,5 @@ def presign_get(
     extra_headers = None
     if response_filename:
         extra_headers = {"response-content-disposition": f'attachment; filename="{response_filename}"'}
-    return client.presigned_get_object(bucket, key, expires=expiry, response_headers=extra_headers)
+    with minio_presign_duration_seconds.time():
+        return client.presigned_get_object(bucket, key, expires=expiry, response_headers=extra_headers)

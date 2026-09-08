@@ -1,10 +1,13 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import FileStatus
+from app.core.enums import FileStatus, UploadJobStatus
+from app.core.metrics import processing_status_count
 from app.models.file import File
+from app.models.upload_job import UploadJob
 from app.services import lifecycle_service
 
 
@@ -70,6 +73,11 @@ class FileRepository:
             setattr(file_obj, field, value)
         db.add(file_obj)
         await db.flush()
+        # docs/HLD.md §21 processing_status_count{status} — every status
+        # write in the whole app goes through this one method, so this is
+        # the single hook that covers all of them without instrumenting
+        # every individual caller.
+        processing_status_count.labels(status=target.value).inc()
         return file_obj
 
     @staticmethod
@@ -99,6 +107,27 @@ class FileRepository:
         db.add(file_obj)
         await db.flush()
         return file_obj
+
+    @staticmethod
+    async def list_abandoned_uploading(db: AsyncSession, cutoff: datetime) -> list[File]:
+        """docs/LLD.md §4.6 step 2 — files still UPLOADING, created before
+        `cutoff`, with no PENDING/COMPLETED upload_jobs row (only an
+        EXPIRED one, or none at all). Used by the reconciliation worker to
+        fail abandoned uploads — never a full-bucket MinIO LIST, purely a
+        bounded query against upload_jobs' own expiry (docs/LLD.md §4.6's
+        explicit out-of-scope note)."""
+        active_job_exists = (
+            select(UploadJob.document_id)
+            .where(
+                UploadJob.document_id == File.document_id,
+                UploadJob.status.in_([UploadJobStatus.PENDING.value, UploadJobStatus.COMPLETED.value]),
+            )
+            .exists()
+        )
+        result = await db.execute(
+            select(File).where(File.status == FileStatus.UPLOADING, File.created_at < cutoff, ~active_job_exists)
+        )
+        return list(result.scalars().all())
 
     @staticmethod
     async def list_paginated(

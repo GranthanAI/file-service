@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user_id, get_db
 from app.api.schemas.file import DeleteResponse, FileListItem, FileListResponse, FileResponse
 from app.core.enums import FileStatus
+from app.core.metrics import delete_requests_total
 from app.services import delete_service, file_service
 from app.storage.minio_client import get_minio_client
 
@@ -81,5 +82,6 @@ async def delete_file(
     minio_client: Minio = Depends(get_minio_client),
 ) -> DeleteResponse:
     """docs/LLD.md §5.8/§6.5 — requires OWNER."""
+    delete_requests_total.inc()
     file = await delete_service.delete_file(db, minio_client, document_id, requester_id)
     return DeleteResponse(document_id=file.document_id, status=file.status)

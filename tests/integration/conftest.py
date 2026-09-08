@@ -151,10 +151,11 @@ def app_client(migrated_database_url: str, minio_client: Minio):
     booting a real producer/worker here would just be an unused dependency
     on a live broker. Real outbox-publishing behavior is covered by
     tests/integration/test_outbox_publishing.py against a real, ephemeral
-    Kafka (testcontainers). run_processing_status_consumer (Phase 7) is
-    mocked for the same reason — it isn't gated behind AV_SCAN_ENABLED and
-    would otherwise need a live broker for every HTTP-flow test in this
-    fixture, not just quarantine-specific ones.
+    Kafka (testcontainers). run_processing_status_consumer (Phase 7) and
+    run_reconciliation_worker (Phase 9) are mocked for the same reason —
+    neither is gated behind AV_SCAN_ENABLED and both would otherwise need a
+    live broker for every HTTP-flow test in this fixture, not just
+    quarantine-specific ones.
     """
     from app.api.deps import get_db
     from app.main import app
@@ -185,6 +186,7 @@ def app_client(migrated_database_url: str, minio_client: Minio):
         patch("app.lifespan.stop_producer", AsyncMock()),
         patch("app.lifespan.run_outbox_worker", AsyncMock()),
         patch("app.lifespan.run_processing_status_consumer", AsyncMock()),
+        patch("app.lifespan.run_reconciliation_worker", AsyncMock()),
     ):
         with TestClient(app) as client:
             yield client

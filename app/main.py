@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.middleware import RequestIDMiddleware
 from app.api.routers import download, files, health, permissions, retry, status, upload
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
@@ -18,6 +19,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_middleware(RequestIDMiddleware)
+
     app.include_router(health.router)
     app.include_router(upload.router)
     app.include_router(files.router)
@@ -26,9 +29,6 @@ def create_app() -> FastAPI:
     app.include_router(retry.router)
     app.include_router(download.router)
     register_exception_handlers(app)
-
-    # Registered in later phases (per docs/IMPLEMENTATION_PLAN.md):
-    #   Phase 10: readiness route on health.router
 
     return app
 

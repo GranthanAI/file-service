@@ -1,9 +1,11 @@
 import json
+from datetime import datetime, timezone
 
 from aiokafka import AIOKafkaProducer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.core.metrics import outbox_publish_lag_seconds
 from app.events.file_events import EVENT_MODELS
 from app.events.topics import PRODUCED_TOPICS
 from app.models.outbox import OutboxEvent
@@ -62,6 +64,10 @@ async def publish_batch(db: AsyncSession, producer: AIOKafkaProducer, *, limit: 
         await producer.send_and_wait(row.event_type, message)
         await OutboxRepository.mark_processed(db, row)
         published += 1
+        # docs/HLD.md §21 outbox_publish_lag_seconds — time between the row
+        # entering the outbox (created_at) and actually reaching Kafka.
+        lag = (datetime.now(timezone.utc) - row.created_at).total_seconds()
+        outbox_publish_lag_seconds.observe(max(lag, 0))
         logger.info("outbox.published", event_id=str(row.id), event_type=row.event_type)
 
     await db.commit()

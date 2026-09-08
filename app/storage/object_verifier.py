@@ -4,6 +4,7 @@ from minio import Minio
 from minio.error import S3Error
 
 from app.core.exceptions import ContentTypeMismatchError, ObjectNotFoundError, SizeMismatchError
+from app.core.metrics import minio_stat_object_duration_seconds
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,8 @@ def verify_uploaded_object(
     only reads metadata, never the object body) — see docs/LLD.md §3.5/§4.5.
     """
     try:
-        stat = client.stat_object(bucket, key)
+        with minio_stat_object_duration_seconds.time():
+            stat = client.stat_object(bucket, key)
     except S3Error as e:
         if e.code in ("NoSuchKey", "NoSuchObject"):
             raise ObjectNotFoundError(bucket, key) from e

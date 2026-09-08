@@ -17,6 +17,7 @@ from app.core.exceptions import (
     PresignExpiredError,
     SizeMismatchError,
 )
+from app.core.metrics import file_size_bytes, upload_failures_total, upload_requests_total
 from app.repositories.file_repository import FileRepository
 from app.repositories.file_version_repository import FileVersionRepository
 from app.repositories.outbox_repository import OutboxRepository
@@ -76,6 +77,7 @@ async def initiate_upload(
     size_bytes: int,
 ) -> InitiateUploadResult:
     """docs/LLD.md §4.1 initiate_upload — steps 1-8."""
+    upload_requests_total.inc()
     content_type_validation.assert_allowed(content_type)
     size_limits.assert_within_limit(size_bytes)
 
@@ -166,6 +168,7 @@ async def complete_upload(
             expected_content_type=job.expected_content_type,
         )
     except (ObjectNotFoundError, SizeMismatchError, ContentTypeMismatchError) as e:
+        upload_failures_total.labels(reason=type(e).__name__).inc()
         await FileRepository.update_status(db, file, FileStatus.FAILED, last_error_code=type(e).__name__)
         # get_db's dependency wrapper rolls back the whole request transaction
         # on any exception (correct default for genuinely unexpected errors)
@@ -185,6 +188,7 @@ async def complete_upload(
         size_bytes=verification.size,
     )
     await UploadJobRepository.mark_completed(db, job)
+    file_size_bytes.observe(verification.size)
 
     if settings.AV_SCAN_ENABLED:
         # No outbox row here — file.uploaded is emitted only by

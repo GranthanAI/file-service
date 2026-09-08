@@ -69,6 +69,16 @@ class Settings(BaseSettings):
     # Background workers
     OUTBOX_POLL_INTERVAL_MS: int = 500
     RECONCILIATION_INTERVAL_SECONDS: int = 300
+    # docs/LLD.md §4.6 step 3: how long an ObjectCreated event is left
+    # unevaluated before being cross-checked against `files` — avoids
+    # flagging a MinIO event as orphaned while the client still has a fair,
+    # normal-timing chance to call /complete.
+    RECONCILIATION_ORPHAN_GRACE_SECONDS: int = 600
+
+    # docs/LLD.md §4.8 — how long GET /health/ready waits on each dependency
+    # check before treating it as failed; a hung DB/MinIO must not hang the
+    # readiness probe itself.
+    HEALTH_CHECK_TIMEOUT_SECONDS: float = 3.0
 
     # Auth — verifies JWTs issued by auth-service locally (no network call,
     # no DB dependency), matching auth-service's OWN actual implementation

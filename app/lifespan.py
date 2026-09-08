@@ -15,17 +15,14 @@ from app.services.quarantine_service import run_quarantine_consumer
 from app.storage.bucket_bootstrap import bootstrap_buckets
 from app.storage.minio_client import get_minio_client
 from app.workers.outbox_worker import run_outbox_worker
+from app.workers.reconciliation_worker import run_reconciliation_worker
 
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Startup/shutdown wiring for the File Service.
-
-    Later phases add here (in order, per docs/IMPLEMENTATION_PLAN.md):
-      - Phase 9: reconciliation_worker background task
-    """
+    """Startup/shutdown wiring for the File Service."""
     logger.info("file_service.startup.begin")
 
     engine = get_engine()
@@ -73,6 +70,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.processing_status_consumer_task = processing_status_consumer_task
     app.state.processing_status_consumer_stop_event = processing_status_consumer_stop_event
 
+    # Phase 9: the reconciliation worker (docs/LLD.md §4.6) — always
+    # started, like the outbox worker and processing-status consumer;
+    # abandoned-upload sweeping applies regardless of AV_SCAN_ENABLED.
+    reconciliation_worker_stop_event = asyncio.Event()
+    reconciliation_worker_task = asyncio.create_task(
+        run_reconciliation_worker(get_session_factory(), reconciliation_worker_stop_event)
+    )
+    app.state.reconciliation_worker_task = reconciliation_worker_task
+    app.state.reconciliation_worker_stop_event = reconciliation_worker_stop_event
+
     logger.info("file_service.startup.complete")
     try:
         yield
@@ -85,6 +92,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await quarantine_consumer_task
         processing_status_consumer_stop_event.set()
         await processing_status_consumer_task
+        reconciliation_worker_stop_event.set()
+        await reconciliation_worker_task
         await stop_producer()
         await dispose_engine()
         logger.info("file_service.shutdown.complete")

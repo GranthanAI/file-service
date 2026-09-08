@@ -19,7 +19,8 @@ against a real, ephemeral Kafka (testcontainers).
 
 Phase 7 wired `run_processing_status_consumer` in unconditionally (it isn't
 gated behind AV_SCAN_ENABLED the way Phase 6's quarantine consumer is), so
-it's mocked out here too for the same reason.
+it's mocked out here too for the same reason. Phase 9's
+`run_reconciliation_worker` is likewise unconditional, so it's mocked too.
 """
 
 from unittest.mock import AsyncMock, patch
@@ -36,6 +37,7 @@ def test_health_live_returns_200() -> None:
         patch("app.lifespan.stop_producer", AsyncMock()),
         patch("app.lifespan.run_outbox_worker", AsyncMock()),
         patch("app.lifespan.run_processing_status_consumer", AsyncMock()),
+        patch("app.lifespan.run_reconciliation_worker", AsyncMock()),
     ):
         with TestClient(app) as client:
             response = client.get("/health/live")
