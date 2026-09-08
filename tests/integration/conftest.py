@@ -1,6 +1,6 @@
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
 import jwt
@@ -121,6 +121,14 @@ def app_client(migrated_database_url: str, minio_client: Minio):
     since it isn't reachable via dependency_overrides (lifespan calls it
     directly, not through Depends()) — the two buckets it would have created
     are created directly on the test MinIO instead.
+
+    start_producer/stop_producer/run_outbox_worker are mocked out the same
+    way: these HTTP-flow tests only assert on `outbox_events` DB rows (see
+    e.g. test_upload_flow.py), never on what actually reaches Kafka, so
+    booting a real producer/worker here would just be an unused dependency
+    on a live broker. Real outbox-publishing behavior is covered by
+    tests/integration/test_outbox_publishing.py against a real, ephemeral
+    Kafka (testcontainers).
     """
     from app.api.deps import get_db
     from app.main import app
@@ -145,7 +153,12 @@ def app_client(migrated_database_url: str, minio_client: Minio):
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_minio_client] = lambda: minio_client
 
-    with patch("app.lifespan.bootstrap_buckets"):
+    with (
+        patch("app.lifespan.bootstrap_buckets"),
+        patch("app.lifespan.start_producer", AsyncMock(return_value=AsyncMock())),
+        patch("app.lifespan.stop_producer", AsyncMock()),
+        patch("app.lifespan.run_outbox_worker", AsyncMock()),
+    ):
         with TestClient(app) as client:
             yield client
 
