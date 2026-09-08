@@ -1,12 +1,18 @@
+from collections.abc import Callable, Coroutine
+from typing import Any
 from uuid import UUID
 
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWTError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.enums import PermissionLevel
 from app.db.session import get_db  # noqa: F401 — re-exported for routers
+from app.models.file import File
+from app.services import permission_service
 
 _bearer_scheme = HTTPBearer()
 
@@ -46,3 +52,24 @@ async def get_current_user_id(
             detail="Invalid token subject",
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
+
+
+def require_permission(level: PermissionLevel) -> Callable[..., Coroutine[Any, Any, File]]:
+    """Dependency factory (docs/LLD.md §4.3): routers declare their required
+    access level declaratively, e.g. `Depends(require_permission(PermissionLevel.OWNER))`.
+    Raises PermissionDeniedError/FileRecordNotFoundError (mapped to 403/404 by
+    the handlers in app/core/exceptions.py) rather than returning a bool, so a
+    failed check short-circuits the route entirely.
+
+    Returns the resolved File row so a route can use it without a second
+    lookup if it wants to (most routes ignore the return value).
+    """
+
+    async def _dependency(
+        document_id: UUID,
+        principal_id: UUID = Depends(get_current_user_id),
+        db: AsyncSession = Depends(get_db),
+    ) -> File:
+        return await permission_service.assert_access(db, document_id, principal_id, level)
+
+    return _dependency
