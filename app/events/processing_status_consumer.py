@@ -115,7 +115,9 @@ async def run_processing_status_consumer(
     try:
         while not stop_event.is_set():
             try:
-                result = await consumer.getmany(timeout_ms=1000, max_records=50)
+                result = await consumer.getmany(
+                    timeout_ms=settings.KAFKA_CONSUMER_POLL_TIMEOUT_MS, max_records=settings.KAFKA_CONSUMER_MAX_RECORDS
+                )
             except Exception:
                 logger.exception("processing_status_consumer.poll_failed")
                 continue

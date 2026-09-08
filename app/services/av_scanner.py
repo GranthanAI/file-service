@@ -39,7 +39,7 @@ class ClamdScanner:
     every call is offloaded to a worker thread (`asyncio.to_thread`) rather
     than blocking the event loop for the duration of the scan."""
 
-    def __init__(self, host: str, port: int, *, timeout: float = 30.0) -> None:
+    def __init__(self, host: str, port: int, *, timeout: float = settings.CLAMAV_TIMEOUT_SECONDS) -> None:
         self._host = host
         self._port = port
         self._timeout = timeout

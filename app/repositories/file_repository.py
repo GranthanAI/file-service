@@ -137,7 +137,7 @@ class FileRepository:
         conversation_id: UUID | None = None,
         status: FileStatus | None = None,
         cursor: UUID | None = None,
-        limit: int = 20,
+        limit: int,
     ) -> list[File]:
         """Keyset pagination on document_id (UUIDv7 — see docs/LLD.md §2.1):
         `WHERE document_id > :cursor ORDER BY document_id LIMIT :limit`,

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id, get_db
 from app.api.schemas.file import DeleteResponse, FileListItem, FileListResponse, FileResponse
+from app.core.config import settings
 from app.core.enums import FileStatus
 from app.core.metrics import delete_requests_total
 from app.services import delete_service, file_service
@@ -47,7 +48,7 @@ async def list_files(
     conversation_id: UUID | None = None,
     status: FileStatus | None = None,
     cursor: UUID | None = None,
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=settings.FILE_LIST_DEFAULT_PAGE_SIZE, ge=1, le=settings.FILE_LIST_MAX_PAGE_SIZE),
     requester_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> FileListResponse:

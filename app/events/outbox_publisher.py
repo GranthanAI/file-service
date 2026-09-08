@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from aiokafka import AIOKafkaProducer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.metrics import outbox_publish_lag_seconds
 from app.events.file_events import EVENT_MODELS
@@ -29,7 +30,7 @@ def _build_message(row: OutboxEvent) -> bytes:
     return json.dumps(envelope).encode("utf-8")
 
 
-async def publish_batch(db: AsyncSession, producer: AIOKafkaProducer, *, limit: int = 100) -> int:
+async def publish_batch(db: AsyncSession, producer: AIOKafkaProducer, *, limit: int | None = None) -> int:
     """docs/LLD.md §4.7 — one poll-and-publish cycle.
 
     Fetches up to `limit` unprocessed rows via `FOR UPDATE SKIP LOCKED`
@@ -49,7 +50,7 @@ async def publish_batch(db: AsyncSession, producer: AIOKafkaProducer, *, limit: 
     Returns the number of rows published this cycle (0 means the backlog was
     empty).
     """
-    rows = await OutboxRepository.fetch_unprocessed_for_update(db, limit=limit)
+    rows = await OutboxRepository.fetch_unprocessed_for_update(db, limit=limit if limit is not None else settings.OUTBOX_BATCH_SIZE)
     published = 0
     for row in rows:
         if row.event_type not in PRODUCED_TOPICS:

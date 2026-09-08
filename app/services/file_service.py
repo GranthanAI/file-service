@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.enums import FileStatus, PermissionLevel
 from app.models.file import File
 from app.repositories.file_repository import FileRepository
@@ -24,7 +25,7 @@ async def list_files(
     conversation_id: UUID | None = None,
     status: FileStatus | None = None,
     cursor: UUID | None = None,
-    limit: int = 20,
+    limit: int | None = None,
 ) -> list[File]:
     """docs/LLD.md §5.4 — keyset pagination on document_id (UUIDv7). Scoped to
     files owned by the requester, matching the owner_id filter already
@@ -36,5 +37,5 @@ async def list_files(
         conversation_id=conversation_id,
         status=status,
         cursor=cursor,
-        limit=limit,
+        limit=limit if limit is not None else settings.FILE_LIST_DEFAULT_PAGE_SIZE,
     )

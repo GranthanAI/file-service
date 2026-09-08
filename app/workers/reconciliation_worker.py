@@ -83,7 +83,9 @@ async def _check_orphan_backlog(db: AsyncSession, consumer: AIOKafkaConsumer) ->
     now = datetime.now(timezone.utc)
     grace = timedelta(seconds=settings.RECONCILIATION_ORPHAN_GRACE_SECONDS)
 
-    result = await consumer.getmany(timeout_ms=1000, max_records=200)
+    result = await consumer.getmany(
+        timeout_ms=settings.RECONCILIATION_POLL_TIMEOUT_MS, max_records=settings.RECONCILIATION_MAX_RECORDS
+    )
     for topic_partition, records in result.items():
         commit_offset: int | None = None
         for record in records:
@@ -127,7 +129,7 @@ async def run_reconciliation_worker(
     consumer = AIOKafkaConsumer(
         settings.MINIO_OBJECT_EVENTS_TOPIC,
         bootstrap_servers=settings.KAFKA_BROKERS,
-        group_id=f"{settings.KAFKA_CONSUMER_GROUP_ID}-reconciliation",
+        group_id=settings.RECONCILIATION_CONSUMER_GROUP_ID,
         auto_offset_reset="earliest",
         enable_auto_commit=False,
     )

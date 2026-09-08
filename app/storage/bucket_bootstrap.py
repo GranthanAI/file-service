@@ -35,7 +35,7 @@ def bootstrap_buckets(client: Minio) -> None:
                     status=ENABLED,
                     rule_filter=Filter(prefix=""),
                     rule_id="expire-unpromoted-quarantine",
-                    expiration=Expiration(days=1),
+                    expiration=Expiration(days=settings.QUARANTINE_OBJECT_EXPIRY_DAYS),
                 ),
             ]
         ),
