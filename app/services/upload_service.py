@@ -54,6 +54,7 @@ def _build_file_uploaded_payload(file, verification: ObjectVerification) -> dict
         "document_id": str(file.document_id),
         "conversation_id": str(file.conversation_id) if file.conversation_id else None,
         "owner_id": str(file.owner_id),
+        "content_version": file.current_version,
         "filename": file.filename,
         "content_type": file.content_type,
         "storage": {

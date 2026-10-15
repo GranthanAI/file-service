@@ -44,6 +44,7 @@ class FileUploadedEvent(BaseModel):
     document_id: UUID
     conversation_id: UUID | None
     owner_id: UUID
+    content_version: int | None = None
     filename: str
     content_type: str
     storage: StorageRef
@@ -59,6 +60,7 @@ class FileDeletedEvent(BaseModel):
     version: int = 1
     document_id: UUID
     owner_id: UUID
+    content_version: int | None = None
     timestamp: datetime
 
 
@@ -71,6 +73,7 @@ class FileProcessingRetryEvent(BaseModel):
     event_type: Literal["file.processing_retry"] = "file.processing_retry"
     version: int = 1
     document_id: UUID
+    content_version: int
     retry_count: int
     timestamp: datetime
 

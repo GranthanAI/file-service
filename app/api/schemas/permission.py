@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.enums import PermissionLevel, PrincipalType
 
@@ -24,3 +24,14 @@ class PermissionResponse(BaseModel):
     principal_type: PrincipalType
     access_level: PermissionLevel
     granted_by: UUID
+
+
+class PermissionCheckRequest(BaseModel):
+    """Retrieval HLD 16.2 - batched, internal-only."""
+
+    user_id: UUID
+    document_ids: list[UUID] = Field(max_length=500)
+
+
+class PermissionCheckResponse(BaseModel):
+    authorized_document_ids: list[UUID]

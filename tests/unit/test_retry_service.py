@@ -13,6 +13,7 @@ def _fake_file(status: FileStatus, retry_count: int = 0):
     file_obj.document_id = uuid.uuid4()
     file_obj.status = status
     file_obj.retry_count = retry_count
+    file_obj.current_version = 3
     return file_obj
 
 
@@ -34,6 +35,7 @@ class TestRetryUpload:
         insert_mock.assert_awaited_once()
         assert insert_mock.call_args.kwargs["event_type"] == "file.processing_retry"
         assert insert_mock.call_args.kwargs["payload"]["retry_count"] == 2  # old (1) + 1
+        assert insert_mock.call_args.kwargs["payload"]["content_version"] == 3
 
         increment_mock.assert_awaited_once()
         assert result is file_obj

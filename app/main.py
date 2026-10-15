@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.middleware import RequestIDMiddleware
-from app.api.routers import download, files, health, permissions, retry, status, upload
+from app.api.routers import download, files, health, internal, permissions, retry, status, upload
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
@@ -28,6 +28,7 @@ def create_app() -> FastAPI:
     app.include_router(permissions.router)
     app.include_router(retry.router)
     app.include_router(download.router)
+    app.include_router(internal.router)
     register_exception_handlers(app)
 
     return app

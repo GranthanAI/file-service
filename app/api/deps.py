@@ -2,8 +2,10 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 from uuid import UUID
 
+import hmac
+
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,3 +75,16 @@ def require_permission(level: PermissionLevel) -> Callable[..., Coroutine[Any, A
         return await permission_service.assert_access(db, document_id, principal_id, level)
 
     return _dependency
+
+
+async def require_internal_service(authorization: str | None = Header(default=None)) -> None:
+    """Authenticates service-to-service calls on /internal/** with a shared
+    credential sent as `Authorization: Bearer <token>` (what retrieval-service's
+    file_service_client sends), never a user JWT. Fails closed: no configured
+    tokens means no caller is accepted."""
+    scheme, _, presented = (authorization or "").partition(" ")
+    if scheme.lower() == "bearer" and presented:
+        for token in settings.internal_service_tokens:
+            if hmac.compare_digest(presented.encode(), token.encode()):
+                return
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing service credential")

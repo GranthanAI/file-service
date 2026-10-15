@@ -16,6 +16,7 @@ def _build_file_processing_retry_payload(file: File) -> dict[str, Any]:
     """docs/LLD.md §4.4 — the exact payload shape shown there."""
     return {
         "document_id": str(file.document_id),
+        "content_version": file.current_version,
         "retry_count": file.retry_count + 1,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

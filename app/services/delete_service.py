@@ -23,6 +23,7 @@ def _build_file_deleted_payload(file: File) -> dict[str, Any]:
     return {
         "document_id": str(file.document_id),
         "owner_id": str(file.owner_id),
+        "content_version": file.current_version,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
