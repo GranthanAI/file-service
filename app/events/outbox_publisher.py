@@ -62,7 +62,7 @@ async def publish_batch(db: AsyncSession, producer: AIOKafkaProducer, *, limit: 
             continue
 
         message = _build_message(row)
-        await producer.send_and_wait(row.event_type, message)
+        await producer.send_and_wait(row.event_type, message, key=str(row.aggregate_id).encode("utf-8"))
         await OutboxRepository.mark_processed(db, row)
         published += 1
         # docs/HLD.md §21 outbox_publish_lag_seconds — time between the row

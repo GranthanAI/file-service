@@ -118,6 +118,15 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
 
+    # Service-to-service credentials accepted on /internal/** (comma-separated
+    # so a token can be rotated without downtime). Empty = every internal call
+    # is rejected (fail closed).
+    INTERNAL_SERVICE_TOKENS: str = ""
+
+    @property
+    def internal_service_tokens(self) -> list[str]:
+        return [t.strip() for t in self.INTERNAL_SERVICE_TOKENS.split(",") if t.strip()]
+
     @property
     def allowed_mime_types(self) -> set[str]:
         return {ct.strip() for ct in self.ALLOWED_MIME_TYPES.split(",") if ct.strip()}
