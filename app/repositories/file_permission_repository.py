@@ -71,7 +71,7 @@ class FilePermissionRepository:
     async def authorized_document_ids(db: AsyncSession, user_id: UUID, document_ids: list[UUID]) -> list[UUID]:
         """Subset of document_ids the user may at least view, in one query:
         the owner, or a direct USER grant (every access level includes VIEWER).
-        Soft-deleted and nonexistent documents are silently omitted."""
+        Soft-deleted, being-deleted and nonexistent documents are silently omitted."""
         if not document_ids:
             return []
         granted = (
@@ -86,7 +86,9 @@ class FilePermissionRepository:
         result = await db.execute(
             select(File.document_id).where(
                 File.document_id.in_(document_ids),
-                File.status != FileStatus.DELETED,
+                # A document being deleted must stop being retrievable immediately, not when the
+                # async cleanup finishes.
+                File.status.notin_([FileStatus.DELETED, FileStatus.DELETING]),
                 or_(File.owner_id == user_id, granted),
             )
         )

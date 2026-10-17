@@ -46,6 +46,39 @@ class TestPermissionCheck:
         assert response.status_code == 200, response.text
         assert set(response.json()["authorized_document_ids"]) == {str(owned), str(granted)}
 
+    async def test_documents_being_deleted_stop_being_retrievable_immediately(
+        self, app_client, db_session, current_user_id, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(settings, "INTERNAL_SERVICE_TOKENS", "test-internal-token")
+        deleting = await _insert_file(db_session, current_user_id)
+        keep = await _insert_file(db_session, current_user_id)
+        file = await FileRepository.get(db_session, deleting)
+        file.status = FileStatus.DELETING  # async cleanup still pending
+        await db_session.commit()
+
+        response = app_client.post(
+            URL,
+            json={"user_id": str(current_user_id), "document_ids": [str(deleting), str(keep)]},
+            headers=_service_headers(),
+        )
+
+        assert response.json()["authorized_document_ids"] == [str(keep)]
+
+    async def test_unknown_user_gets_nothing_even_for_existing_documents(
+        self, app_client, db_session, current_user_id, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(settings, "INTERNAL_SERVICE_TOKENS", "test-internal-token")
+        document = await _insert_file(db_session, current_user_id)
+
+        response = app_client.post(
+            URL,
+            json={"user_id": str(uuid4()), "document_ids": [str(document)]},
+            headers=_service_headers(),
+        )
+
+        assert response.status_code == 200
+        assert response.json()["authorized_document_ids"] == []
+
     async def test_missing_or_wrong_credential_is_rejected(self, app_client, current_user_id, monkeypatch) -> None:
         monkeypatch.setattr(settings, "INTERNAL_SERVICE_TOKENS", "test-internal-token")
         body = {"user_id": str(current_user_id), "document_ids": []}

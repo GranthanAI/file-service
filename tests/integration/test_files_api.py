@@ -160,3 +160,29 @@ class TestListPagination:
         assert pages == 3
         assert len(seen_ids) == len(expected_ids) == 25  # no duplicates, no gaps
         assert set(seen_ids) == expected_ids
+
+
+class TestStatusReportsFailureReason:
+    async def test_failed_file_exposes_error_code_and_message(self, app_client, db_session, current_user_id) -> None:
+        document_id = await _insert_file(db_session, current_user_id)
+        file = await FileRepository.get(db_session, document_id)
+        file.status = FileStatus.FAILED  # bypass the state machine: only the response shape is under test
+        file.last_error_code = "NO_EXTRACTABLE_TEXT"
+        file.last_error_message = "No text could be extracted from this document."
+        await db_session.commit()
+
+        body = app_client.get(f"/files/{document_id}/status", headers=_auth_headers_for(current_user_id)).json()
+
+        assert body["status"] == "FAILED"
+        assert body["error_code"] == "NO_EXTRACTABLE_TEXT"
+        assert "No text" in body["error_message"]
+
+    async def test_non_failed_file_never_leaks_a_stale_error(self, app_client, db_session, current_user_id) -> None:
+        document_id = await _insert_file(db_session, current_user_id)
+        file = await FileRepository.get(db_session, document_id)
+        file.last_error_code = "OLD_ERROR"  # left over from an earlier attempt
+        await db_session.commit()
+
+        body = app_client.get(f"/files/{document_id}/status", headers=_auth_headers_for(current_user_id)).json()
+
+        assert body["error_code"] is None and body["error_message"] is None
