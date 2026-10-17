@@ -45,6 +45,10 @@ class FileStatusResponse(BaseModel):
     document_id: UUID
     status: FileStatus
     retry_count: int
+    # Populated only while status is FAILED: why processing/indexing failed (e.g. a scanned PDF
+    # with no extractable text), so clients can show something actionable. Never document content.
+    error_code: str | None = None
+    error_message: str | None = None
 
 
 class DeleteResponse(BaseModel):
