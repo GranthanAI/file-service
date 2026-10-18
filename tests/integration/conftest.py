@@ -75,7 +75,10 @@ def minio_container():
     dev-only key used in the root docker-compose.yml's file-minio service,
     not a production secret.
     """
-    container = MinioContainer().with_env(
+    # Pinned to the MinIO release the shared stack runs (root docker-compose.yml
+    # file-minio). minio/minio is no longer published on Docker Hub, so relying on
+    # testcontainers' default tag breaks as soon as that image is not cached locally.
+    container = MinioContainer(image="minio/minio:RELEASE.2023-03-20T20-16-18Z").with_env(
         "MINIO_KMS_SECRET_KEY", "test-key:SEg942nDjeIcAe34dNb+Dl/Y8QOOeUrpdgKRxTAtEDQ="
     )
     with container as started:

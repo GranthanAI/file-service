@@ -10,6 +10,22 @@ from app.services import file_service
 
 router = APIRouter(tags=["status"])
 
+# User-facing reason per processing error code. The stored `last_error_message` can be a
+# raw exception string from the ingestion pipeline (hosts, paths, library internals), so
+# it is never returned to clients; only these fixed messages are.
+_SAFE_ERROR_MESSAGES = {
+    "NO_EXTRACTABLE_TEXT": "No text could be extracted from this document (it may be a scanned or image-only file).",
+    "PARSER_ERROR": "The document could not be read. It may be damaged or in an unsupported format.",
+    "DOWNLOAD_ERROR": "The uploaded file could not be read from storage. Try again.",
+    "EMBEDDING_ERROR": "The document could not be indexed right now. Try again later.",
+    "INDEXING_ERROR": "The document could not be indexed right now. Try again later.",
+}
+_GENERIC_ERROR_MESSAGE = "Processing failed. Try again."
+
+
+def safe_error_message(error_code: str | None) -> str:
+    return _SAFE_ERROR_MESSAGES.get(error_code or "", _GENERIC_ERROR_MESSAGE)
+
 
 @router.get("/files/{document_id}/status", response_model=FileStatusResponse)
 async def get_file_status(
@@ -28,5 +44,5 @@ async def get_file_status(
         status=file.status,
         retry_count=file.retry_count,
         error_code=file.last_error_code if failed else None,
-        error_message=file.last_error_message if failed else None,
+        error_message=safe_error_message(file.last_error_code) if failed else None,
     )

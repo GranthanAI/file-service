@@ -186,3 +186,31 @@ class TestStatusReportsFailureReason:
         body = app_client.get(f"/files/{document_id}/status", headers=_auth_headers_for(current_user_id)).json()
 
         assert body["error_code"] is None and body["error_message"] is None
+
+
+class TestStatusNeverLeaksInternalErrorText:
+    async def test_raw_exception_text_is_replaced_by_a_safe_message(self, app_client, db_session, current_user_id) -> None:
+        document_id = await _insert_file(db_session, current_user_id)
+        file = await FileRepository.get(db_session, document_id)
+        file.status = FileStatus.FAILED
+        file.last_error_code = "DOWNLOAD_ERROR"
+        file.last_error_message = "S3Error: http://file-minio:9000/graphgpt-files/u/x/v1/original.pdf AccessDenied"
+        await db_session.commit()
+
+        body = app_client.get(f"/files/{document_id}/status", headers=_auth_headers_for(current_user_id)).json()
+
+        assert body["error_code"] == "DOWNLOAD_ERROR"
+        assert "minio" not in body["error_message"].lower() and "S3Error" not in body["error_message"]
+        assert body["error_message"] == "The uploaded file could not be read from storage. Try again."
+
+    async def test_unknown_code_gets_the_generic_message(self, app_client, db_session, current_user_id) -> None:
+        document_id = await _insert_file(db_session, current_user_id)
+        file = await FileRepository.get(db_session, document_id)
+        file.status = FileStatus.FAILED
+        file.last_error_code = "SOMETHING_NEW"
+        file.last_error_message = "Traceback (most recent call last): ..."
+        await db_session.commit()
+
+        body = app_client.get(f"/files/{document_id}/status", headers=_auth_headers_for(current_user_id)).json()
+
+        assert body["error_message"] == "Processing failed. Try again."
