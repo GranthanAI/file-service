@@ -123,6 +123,29 @@ class Settings(BaseSettings):
     # is rejected (fail closed).
     INTERNAL_SERVICE_TOKENS: str = ""
 
+    # YouTube transcript sources (see docs/YOUTUBE_TRANSCRIPT_CONTEXT_ADR.md). The provider is an UNOFFICIAL client of
+    # YouTube's web endpoints: confirm terms of use and egress (proxy) before enabling it in production.
+    YOUTUBE_ENABLED: bool = True
+    YOUTUBE_ALLOW_SHORTS: bool = True
+    YOUTUBE_LANGUAGE_PREFERENCE: str = "en"             # comma-separated, most preferred first
+    YOUTUBE_FALLBACK_ANY_LANGUAGE: bool = True          # False: no track in a preferred language = NO_SUPPORTED_LANGUAGE
+    YOUTUBE_REQUEST_TIMEOUT_SECONDS: float = 10.0
+    YOUTUBE_FETCH_ATTEMPTS: int = 3                     # in-process attempts for retryable failures
+    YOUTUBE_BACKOFF_BASE_SECONDS: float = 1.0
+    YOUTUBE_MAX_CONCURRENT_FETCHES: int = 4
+    YOUTUBE_USER_HOURLY_QUOTA: int = 20                 # new video sources per user per hour
+    YOUTUBE_MAX_SEGMENTS: int = 30_000
+    YOUTUBE_MAX_TRANSCRIPT_CHARS: int = 600_000
+    YOUTUBE_MAX_DURATION_SECONDS: int = 12 * 3600
+    YOUTUBE_LEASE_SECONDS: int = 180                    # a FETCHING claim older than this may be taken over
+    YOUTUBE_RETRY_COOLDOWN_SECONDS: int = 60
+    YOUTUBE_PERMANENT_RETRY_COOLDOWN_SECONDS: int = 3600
+    YOUTUBE_PROXY_URL: str = ""                         # optional egress proxy for blocked datacentre IPs
+
+    @property
+    def youtube_languages(self) -> list[str]:
+        return [x.strip().lower() for x in self.YOUTUBE_LANGUAGE_PREFERENCE.split(",") if x.strip()]
+
     @property
     def internal_service_tokens(self) -> list[str]:
         return [t.strip() for t in self.INTERNAL_SERVICE_TOKENS.split(",") if t.strip()]

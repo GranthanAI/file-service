@@ -19,6 +19,7 @@ dependencies = [
     "pyjwt>=2.8.0",
     "clamd>=1.0.2",
     "prometheus-client>=0.20.0",
+    "youtube-transcript-api>=1.2.4,<2",
 ]
 
 [dependency-groups]

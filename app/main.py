@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.middleware import RequestIDMiddleware
-from app.api.routers import download, files, health, internal, permissions, retry, status, upload
+from app.api.routers import download, files, health, internal, permissions, retry, status, upload, youtube
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
@@ -23,6 +23,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(upload.router)
+    app.include_router(youtube.router)   # before files: /files/youtube must not be read as /files/{document_id}
     app.include_router(files.router)
     app.include_router(status.router)
     app.include_router(permissions.router)
